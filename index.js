@@ -61,6 +61,37 @@ async function run() {
       res.send(result);
     });
 
+    app.get('/api/tickets', async (req, res) => {
+      const search = req.query.search;
+      const transportType = req.query.transportType;
+      const from = req.query.location;
+      const to = req.query.to;
+      const query = {}; // {title: "mern"}
+      if (search) {
+        query.title = {
+          $regex: search,
+          $options: 'i', // upper lower matter korbe na
+        };
+      }
+      if (transportType) {
+        // query.category = category;
+        // ?category=Music,Tech,Digial
+        // console.log(category, category.split(',')); ["Music", "Tech", "Digital"]
+
+        query.transportType = { $in: transportType.split(',') };
+      }
+      if (from) {
+        query.from = from;
+      }
+      if (to) {
+        query.to = to;
+      }
+
+      const cursor = ticketsCollection.find(query);
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
