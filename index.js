@@ -1,7 +1,7 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 dotenv.config();
 const app = express()
@@ -40,14 +40,17 @@ async function run() {
     });
 
     app.post('/api/tickets', async (req, res) => {
-      const data = req.body;
+      const ticketData = {
+  ...data,
+  bookedSeats: 0,
+};
       // console.log(data);
       const vendor = await usersCollection.findOne({ email: data?.vendorEmail });
       const vendorTicketCounts = await ticketsCollection.countDocuments({
         vendorEmail: data?.vendorEmail,
       });
   
-      const result = await ticketsCollection.insertOne(data);
+      const result = await ticketsCollection.insertOne(ticketData);
       // console.log(result);
 
       res.send(result);
@@ -90,6 +93,67 @@ async function run() {
       const cursor = ticketsCollection.find(query);
       const result = await cursor.toArray();
       res.send(result);
+    });
+
+    app.get('/api/single-ticket/:id', async (req, res) => {
+      const { id } = req.params;
+      const query = { _id: new ObjectId(id) };
+      const result = await ticketsCollection.findOne(query);
+      res.send(result);
+    });
+
+    app.post('/api/bookings', async (req, res) => {
+    try {
+    const booking = req.body;
+
+    const ticket = await ticketsCollection.findOne({
+      _id: new ObjectId(booking.ticketId),
+    });
+
+    if (!ticket) {
+      return res.status(404).send({
+        message: "Ticket not found",
+      });
+    }
+
+    const bookedSeats = ticket.bookedSeats || 0;
+
+    const availableSeats =
+      ticket.quantity - bookedSeats;
+
+    if (booking.quantity > availableSeats) {
+      return res.status(400).send({
+        message: "Not enough seats available",
+      });
+    }
+
+    // Create booking
+    const bookingResult =
+      await bookingsCollection.insertOne(booking);
+
+    // Update booked seats
+    await ticketsCollection.updateOne(
+      {
+        _id: new ObjectId(booking.ticketId),
+      },
+      {
+        $inc: {
+          bookedSeats: booking.quantity,
+        },
+      }
+    );
+
+    res.send({
+      success: true,
+      insertedId: bookingResult.insertedId,
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).send({
+      message: "Booking failed",
+    });
+  }
     });
 
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
