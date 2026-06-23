@@ -10,9 +10,6 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-
-
-
 const uri = process.env.MONGODB_URI;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -30,6 +27,40 @@ async function run() {
     // await client.connect();
     // // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
+    const db = client.db("routego");
+    const usersCollection = db.collection("user");
+    const ticketsCollection = db.collection("tickets");
+    const bookingsCollection = db.collection("bookings");
+    const transactionsCollection = db.collection("transactions");
+
+    app.post('/api/users', async (req, res) => {
+      const user = req.body;
+      const result = await usersCollection.insertOne(user);
+      res.send(result);
+    });
+
+    app.post('/api/tickets', async (req, res) => {
+      const data = req.body;
+      // console.log(data);
+      const vendor = await usersCollection.findOne({ email: data?.vendorEmail });
+      const vendorTicketCounts = await ticketsCollection.countDocuments({
+        vendorEmail: data?.vendorEmail,
+      });
+  
+      const result = await ticketsCollection.insertOne(data);
+      // console.log(result);
+
+      res.send(result);
+    });
+    
+    app.get('/api/tickets/:email', async (req, res) => {
+      const { email } = req.params;
+      // console.log(email);
+
+      const result = await ticketsCollection.find({ vendorEmail: email }).toArray();
+      res.send(result);
+    });
+
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
