@@ -6,6 +6,7 @@ const usersRouter = require("./routes/users");
 const ticketsRouter = require("./routes/tickets");
 const bookingsRouter = require("./routes/bookings");
 const singleTicketRouter = require("./routes/singleTicket");
+const vendorRouter = require("./routes/vendor");
 
 dotenv.config();
 
@@ -46,6 +47,7 @@ async function start() {
   app.use("/api/tickets", ticketsRouter);
   app.use("/api/bookings", bookingsRouter);
   app.use("/api/single-ticket", singleTicketRouter);
+  app.use("/api/vendor", vendorRouter);
 
   app.listen(port, () => {
     console.log(`🚀 Server running on port ${port}`);
