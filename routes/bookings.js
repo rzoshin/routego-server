@@ -12,7 +12,7 @@ async function getReservedQuantity(ticketId) {
       {
         $match: {
           ticketId: String(ticketId),
-          bookingStatus: { $in: ["pending", "accepted", "paid"] },
+          bookingStatus: { $in: ["pending", "accepted"] },
         },
       },
       {

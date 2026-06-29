@@ -121,6 +121,147 @@ router.get("/latest", async (_req, res) => {
   }
 });
 
+router.get("/admin/all", async (_req, res) => {
+  try {
+    const ticketsCollection = getCollection("tickets");
+
+    const tickets = await ticketsCollection
+      .find({})
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send(tickets);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Failed to fetch tickets" });
+  }
+});
+
+router.get("/admin/approved", async (_req, res) => {
+  try {
+    const ticketsCollection = getCollection("tickets");
+
+    const tickets = await ticketsCollection
+      .find({ verificationStatus: "approved" })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send(tickets);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Failed to fetch approved tickets" });
+  }
+});
+
+router.patch("/:id/verification", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const ticketsCollection = getCollection("tickets");
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid ticket ID" });
+    }
+
+    if (!["approved", "rejected"].includes(status)) {
+      return res.status(400).send({ message: "Invalid verification status" });
+    }
+
+    const ticket = await ticketsCollection.findOne({
+      _id: new ObjectId(id),
+    });
+
+    if (!ticket) {
+      return res.status(404).send({ message: "Ticket not found" });
+    }
+
+    const updates = {
+      verificationStatus: status,
+      updatedAt: new Date(),
+    };
+
+    if (status === "rejected") {
+      updates.isAdvertised = false;
+    }
+
+    const result = await ticketsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updates }
+    );
+
+    res.send({
+      success: true,
+      modifiedCount: result.modifiedCount,
+      verificationStatus: status,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Failed to update verification status" });
+  }
+});
+
+router.patch("/:id/advertise", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isAdvertised } = req.body;
+    const ticketsCollection = getCollection("tickets");
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid ticket ID" });
+    }
+
+    if (typeof isAdvertised !== "boolean") {
+      return res.status(400).send({ message: "isAdvertised must be a boolean" });
+    }
+
+    const ticket = await ticketsCollection.findOne({
+      _id: new ObjectId(id),
+    });
+
+    if (!ticket) {
+      return res.status(404).send({ message: "Ticket not found" });
+    }
+
+    if (ticket.verificationStatus !== "approved") {
+      return res.status(400).send({
+        message: "Only approved tickets can be advertised",
+      });
+    }
+
+    if (isAdvertised && !ticket.isAdvertised) {
+      const advertisedCount = await ticketsCollection.countDocuments({
+        isAdvertised: true,
+        verificationStatus: "approved",
+      });
+
+      if (advertisedCount >= 6) {
+        return res.status(400).send({
+          message: "Cannot advertise more than 6 tickets at a time",
+        });
+      }
+    }
+
+    const result = await ticketsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      {
+        $set: {
+          isAdvertised,
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    res.send({
+      success: true,
+      modifiedCount: result.modifiedCount,
+      isAdvertised,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Failed to update advertise status" });
+  }
+});
+
 router.get("/vendor/:email", async (req, res) => {
   try {
     const { email } = req.params;
