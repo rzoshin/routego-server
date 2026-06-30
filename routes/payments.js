@@ -12,7 +12,7 @@ function createMockTransactionId() {
 
 router.post("/complete", async (req, res) => {
   try {
-    const { bookingId, userEmail } = req.body;
+    const { bookingId, userEmail, transactionId: stripeTransactionId } = req.body;
     const bookingsCollection = getCollection("bookings");
     const ticketsCollection = getCollection("tickets");
     const transactionsCollection = getCollection("transactions");
@@ -38,7 +38,18 @@ router.post("/complete", async (req, res) => {
     }
 
     if (booking.bookingStatus === "paid") {
-      return res.status(400).send({ message: "Booking is already paid" });
+      return res.send({
+        success: true,
+        message: "Booking is already paid",
+        bookingId: String(bookingId),
+        transactionId: booking.transactionId,
+        amount: booking.totalPrice,
+        ticketTitle: booking.ticketTitle,
+        quantity: booking.quantity,
+        paidAt: booking.paidAt,
+        bookingStatus: "paid",
+        paymentStatus: "paid",
+      });
     }
 
     if (booking.bookingStatus !== "accepted") {
@@ -67,7 +78,8 @@ router.post("/complete", async (req, res) => {
       return res.status(400).send({ message: "Not enough tickets available" });
     }
 
-    const transactionId = createMockTransactionId();
+    const transactionId =
+      stripeTransactionId || createMockTransactionId();
     const paidAt = new Date();
 
     await bookingsCollection.updateOne(
@@ -108,11 +120,14 @@ router.post("/complete", async (req, res) => {
 
     res.send({
       success: true,
+      bookingId: String(bookingId),
       transactionId,
       amount: booking.totalPrice,
       ticketTitle: booking.ticketTitle,
       quantity: booking.quantity,
       paidAt,
+      bookingStatus: "paid",
+      paymentStatus: "paid",
     });
   } catch (error) {
     console.error(error);

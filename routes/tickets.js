@@ -89,7 +89,7 @@ router.get("/featured", async (_req, res) => {
         isAdvertised: true,
         vendorEmail: { $nin: fraudEmails },
       })
-      .sort({ createdAt: -1 })
+      .sort({ updatedAt: -1, createdAt: -1 })
       .limit(6)
       .toArray();
 
