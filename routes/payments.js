@@ -2,6 +2,11 @@ const express = require("express");
 const { ObjectId } = require("mongodb");
 const { getCollection } = require("../db");
 const { isDeparturePassed } = require("../lib/parseDepartureDateTime");
+const {
+  verifyToken,
+  requireSelfOrAdmin,
+  normalizeEmail,
+} = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -10,7 +15,7 @@ function createMockTransactionId() {
   return `txn_test_${Date.now()}_${suffix}`;
 }
 
-router.post("/complete", async (req, res) => {
+router.post("/complete", verifyToken, async (req, res) => {
   try {
     const { bookingId, userEmail, transactionId: stripeTransactionId } = req.body;
     const bookingsCollection = getCollection("bookings");
@@ -23,6 +28,10 @@ router.post("/complete", async (req, res) => {
 
     if (!userEmail) {
       return res.status(400).send({ message: "User email is required" });
+    }
+
+    if (normalizeEmail(userEmail) !== normalizeEmail(req.auth.email)) {
+      return res.status(403).send({ message: "Unauthorized payment attempt" });
     }
 
     const booking = await bookingsCollection.findOne({
@@ -135,7 +144,11 @@ router.post("/complete", async (req, res) => {
   }
 });
 
-router.get("/user/:email", async (req, res) => {
+router.get(
+  "/user/:email",
+  verifyToken,
+  requireSelfOrAdmin((req) => req.params.email),
+  async (req, res) => {
   try {
     const { email } = req.params;
     const transactionsCollection = getCollection("transactions");
@@ -152,7 +165,7 @@ router.get("/user/:email", async (req, res) => {
   }
 });
 
-router.get("/verify/:bookingId", async (req, res) => {
+router.get("/verify/:bookingId", verifyToken, async (req, res) => {
   try {
     const { bookingId } = req.params;
     const bookingsCollection = getCollection("bookings");
@@ -167,6 +180,10 @@ router.get("/verify/:bookingId", async (req, res) => {
 
     if (!booking || booking.bookingStatus !== "paid") {
       return res.status(404).send({ message: "Paid booking not found" });
+    }
+
+    if (normalizeEmail(booking.userEmail) !== normalizeEmail(req.auth.email)) {
+      return res.status(403).send({ message: "Forbidden" });
     }
 
     res.send({

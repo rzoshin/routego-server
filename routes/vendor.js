@@ -1,9 +1,14 @@
 const express = require("express");
 const { getCollection } = require("../db");
+const { verifyToken, requireSelfOrAdmin } = require("../middleware/auth");
 
 const router = express.Router();
 
-router.get("/stats/:email", async (req, res) => {
+router.get(
+  "/stats/:email",
+  verifyToken,
+  requireSelfOrAdmin((req) => req.params.email),
+  async (req, res) => {
   try {
     const { email } = req.params;
     const ticketsCollection = getCollection("tickets");

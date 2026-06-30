@@ -1,6 +1,12 @@
 const express = require("express");
 const { ObjectId } = require("mongodb");
 const { getCollection } = require("../db");
+const {
+  verifyToken,
+  requireRole,
+  requireSelfOrAdmin,
+  normalizeEmail,
+} = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -17,13 +23,17 @@ function normalizeUserPayload(body, existingUser = null) {
 }
 
 // Upsert user (email/password or Google sign-up sync)
-router.post("/", async (req, res) => {
+router.post("/", verifyToken, async (req, res) => {
   try {
     const usersCollection = getCollection("users");
     const user = req.body;
 
     if (!user?.email) {
       return res.status(400).send({ message: "Email is required" });
+    }
+
+    if (normalizeEmail(user.email) !== normalizeEmail(req.auth.email)) {
+      return res.status(403).send({ message: "Forbidden" });
     }
 
     const existingUser = await usersCollection.findOne({ email: user.email });
@@ -56,8 +66,8 @@ router.post("/", async (req, res) => {
   }
 });
 
-// List all users (admin — JWT protection added in Phase 7)
-router.get("/", async (_req, res) => {
+// List all users (admin)
+router.get("/", verifyToken, requireRole("admin"), async (_req, res) => {
   try {
     const usersCollection = getCollection("users");
     const users = await usersCollection
@@ -71,7 +81,11 @@ router.get("/", async (_req, res) => {
   }
 });
 
-router.get("/:email/stats", async (req, res) => {
+router.get(
+  "/:email/stats",
+  verifyToken,
+  requireSelfOrAdmin((req) => req.params.email),
+  async (req, res) => {
   try {
     const { email } = req.params;
     const usersCollection = getCollection("users");
@@ -150,7 +164,11 @@ router.get("/:email/stats", async (req, res) => {
   }
 });
 
-router.get("/:email", async (req, res) => {
+router.get(
+  "/:email",
+  verifyToken,
+  requireSelfOrAdmin((req) => req.params.email),
+  async (req, res) => {
   try {
     const { email } = req.params;
     const usersCollection = getCollection("users");
@@ -171,8 +189,8 @@ router.get("/:email", async (req, res) => {
   }
 });
 
-// Update user role or fraud flag (admin — JWT protection added in Phase 7)
-router.patch("/:id", async (req, res) => {
+// Update user role or fraud flag (admin)
+router.patch("/:id", verifyToken, requireRole("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const { role, isFraud } = req.body;

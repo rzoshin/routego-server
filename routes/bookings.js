@@ -1,6 +1,13 @@
 const express = require("express");
 const { ObjectId } = require("mongodb");
 const { getCollection } = require("../db");
+const {
+  verifyToken,
+  requireSelfOrAdmin,
+  requireBookingAccess,
+  requireBookingVendorOrAdmin,
+  normalizeEmail,
+} = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -27,7 +34,7 @@ async function getReservedQuantity(ticketId) {
   return result[0]?.total || 0;
 }
 
-router.post("/", async (req, res) => {
+router.post("/", verifyToken, async (req, res) => {
   try {
     const booking = req.body;
     const ticketsCollection = getCollection("tickets");
@@ -35,6 +42,13 @@ router.post("/", async (req, res) => {
 
     if (!booking?.quantity || booking.quantity <= 0) {
       return res.status(400).send({ message: "Invalid quantity" });
+    }
+
+    if (
+      booking.userEmail &&
+      normalizeEmail(booking.userEmail) !== normalizeEmail(req.auth.email)
+    ) {
+      return res.status(403).send({ message: "Forbidden" });
     }
 
     if (!booking.ticketId || !ObjectId.isValid(booking.ticketId)) {
@@ -74,7 +88,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.get("/id/:id", async (req, res) => {
+router.get("/id/:id", verifyToken, requireBookingAccess, async (req, res) => {
   try {
     const { id } = req.params;
     const bookingsCollection = getCollection("bookings");
@@ -98,7 +112,11 @@ router.get("/id/:id", async (req, res) => {
   }
 });
 
-router.patch("/:id/status", async (req, res) => {
+router.patch(
+  "/:id/status",
+  verifyToken,
+  requireBookingVendorOrAdmin,
+  async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -143,7 +161,11 @@ router.patch("/:id/status", async (req, res) => {
   }
 });
 
-router.get("/vendor/:email", async (req, res) => {
+router.get(
+  "/vendor/:email",
+  verifyToken,
+  requireSelfOrAdmin((req) => req.params.email),
+  async (req, res) => {
   try {
     const { email } = req.params;
     const bookingsCollection = getCollection("bookings");
@@ -160,7 +182,11 @@ router.get("/vendor/:email", async (req, res) => {
   }
 });
 
-router.get("/:email", async (req, res) => {
+router.get(
+  "/:email",
+  verifyToken,
+  requireSelfOrAdmin((req) => req.params.email),
+  async (req, res) => {
   try {
     const { email } = req.params;
     const bookingsCollection = getCollection("bookings");

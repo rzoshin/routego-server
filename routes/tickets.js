@@ -1,6 +1,13 @@
 const express = require("express");
 const { ObjectId } = require("mongodb");
 const { getCollection } = require("../db");
+const {
+  verifyToken,
+  requireRole,
+  requireSelfOrAdmin,
+  requireTicketOwnerOrAdmin,
+  normalizeEmail,
+} = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -45,11 +52,18 @@ function buildPublicTicketQuery(req, fraudEmails) {
   return query;
 }
 
-router.post("/", async (req, res) => {
+router.post("/", verifyToken, requireRole("vendor"), async (req, res) => {
   try {
     const data = req.body;
     const usersCollection = getCollection("users");
     const ticketsCollection = getCollection("tickets");
+
+    if (
+      data?.vendorEmail &&
+      normalizeEmail(data.vendorEmail) !== normalizeEmail(req.auth.email)
+    ) {
+      return res.status(403).send({ message: "Forbidden" });
+    }
 
     const vendor = await usersCollection.findOne({ email: data?.vendorEmail });
 
@@ -121,7 +135,7 @@ router.get("/latest", async (_req, res) => {
   }
 });
 
-router.get("/admin/all", async (_req, res) => {
+router.get("/admin/all", verifyToken, requireRole("admin"), async (_req, res) => {
   try {
     const ticketsCollection = getCollection("tickets");
 
@@ -137,7 +151,7 @@ router.get("/admin/all", async (_req, res) => {
   }
 });
 
-router.get("/admin/approved", async (_req, res) => {
+router.get("/admin/approved", verifyToken, requireRole("admin"), async (_req, res) => {
   try {
     const ticketsCollection = getCollection("tickets");
 
@@ -153,7 +167,7 @@ router.get("/admin/approved", async (_req, res) => {
   }
 });
 
-router.patch("/:id/verification", async (req, res) => {
+router.patch("/:id/verification", verifyToken, requireRole("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -200,7 +214,7 @@ router.patch("/:id/verification", async (req, res) => {
   }
 });
 
-router.patch("/:id/advertise", async (req, res) => {
+router.patch("/:id/advertise", verifyToken, requireRole("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const { isAdvertised } = req.body;
@@ -262,7 +276,11 @@ router.patch("/:id/advertise", async (req, res) => {
   }
 });
 
-router.get("/vendor/:email", async (req, res) => {
+router.get(
+  "/vendor/:email",
+  verifyToken,
+  requireSelfOrAdmin((req) => req.params.email),
+  async (req, res) => {
   try {
     const { email } = req.params;
     const ticketsCollection = getCollection("tickets");
@@ -279,7 +297,11 @@ router.get("/vendor/:email", async (req, res) => {
   }
 });
 
-router.patch("/:id", async (req, res) => {
+router.patch(
+  "/:id",
+  verifyToken,
+  requireTicketOwnerOrAdmin,
+  async (req, res) => {
   try {
     const { id } = req.params;
     const ticketsCollection = getCollection("tickets");
@@ -334,7 +356,11 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete(
+  "/:id",
+  verifyToken,
+  requireTicketOwnerOrAdmin,
+  async (req, res) => {
   try {
     const { id } = req.params;
     const ticketsCollection = getCollection("tickets");
